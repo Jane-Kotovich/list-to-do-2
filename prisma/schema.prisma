@@ -1,0 +1,29 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model list_to_do{
+  id Int @default(autoincrement()) @id
+  item_to_do String @db.VarChar(255)
+  author Users @relation(fields: [authorId], references: [id])
+  authorId Int 
+  done Boolean
+}
+
+model Users {
+  id Int @default(autoincrement()) @id
+  email String @unique
+  firstname String 
+  secondname String 
+  password String
+  active Boolean
+  itemsToDo list_to_do[]
+}

@@ -7,23 +7,53 @@ const client = new prisma.PrismaClient();
 const morgan = require("morgan");
 const { compare, hash } = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const passport = require("passport");
+const JwtStrategy = require("passport-jwt").Strategy;
+const ExtractJwt = require("passport-jwt").ExtractJwt;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 app.use(morgan("dev"));
+
+const passportOptions = {
+  jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+  secretOrKey: ACCESS_SECRET,
+};
+
+passport.use(
+  new JwtStrategy(passportOptions, async (jwtPayload, done) => {
+    try {
+      const user = await client.users.findUnique({
+        where: {
+          id: jwtPayload.sub,
+        },
+      });
+      if (!user) throw new Error("not such user exists");
+      return done(null, user);
+    } catch (error) {
+      console.log(error);
+      return done(error, false);
+    }
+  })
+);
+
+app.use(passport.initialize());
 
 app.get("/", (req, res) => {
   res.send("Heya there!");
 });
-app.get("/users", (req, res) => {
-  client.users
-    .findMany({
-      select: { id: true, firstname: true, secondname: true, email: true },
-    })
-    .then((users) => {
-      res.json(users);
-    });
-});
+app.get(
+  "/users",
+  passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    client.users
+      .findMany({
+        select: { id: true, firstname: true, secondname: true, email: true },
+      })
+      .then((users) => {
+        res.json(users);
+      });
+  }
+);
 
 app.post("/users", async (req, res) => {
   try {
@@ -56,6 +86,7 @@ app.post("/login", async (req, res) => {
     const accessToken = jwt.sign({ sub: user.id }, ACCESS_SECRET, {
       expiresIn: "15m",
     });
+    res.json({ accessToken: accessToken });
     console.log(accessToken);
   } catch (error) {
     console.error(error);

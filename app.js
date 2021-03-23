@@ -2,6 +2,7 @@ const express = require("express");
 const prisma = require("@prisma/client");
 const app = express();
 const PORT = 3000;
+const ACCESS_SECRET = "access_secret";
 const client = new prisma.PrismaClient();
 const morgan = require("morgan");
 const { compare, hash } = require("bcryptjs");
@@ -44,7 +45,7 @@ app.post("/users", async (req, res) => {
   }
 });
 
-app.post("login", async (req, res) => {
+app.post("/login", async (req, res) => {
   try {
     const user = await client.users.findUnique({
       where: { email: req.body.email },
@@ -52,6 +53,10 @@ app.post("login", async (req, res) => {
     if (!user) throw new Error("Email is not registered!");
     const passwordsMatch = await compare(req.body.password, user.password);
     if (!passwordsMatch) throw new Error("Email or password is invalid");
+    const accessToken = jwt.sign({ sub: user.id }, ACCESS_SECRET, {
+      expiresIn: "15m",
+    });
+    console.log(accessToken);
   } catch (error) {
     console.error(error);
     res.status(401).json({ ok: false, error: error.message });

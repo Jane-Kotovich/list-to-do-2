@@ -5,6 +5,7 @@ const PORT = 3000;
 const client = new prisma.PrismaClient();
 const morgan = require("morgan");
 const { compare, hash } = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -37,6 +38,20 @@ app.post("/users", async (req, res) => {
     });
     if (!user) throw new Error("Email taken");
     res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    res.status(401).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("login", async (req, res) => {
+  try {
+    const user = await client.users.findUnique({
+      where: { email: req.body.email },
+    });
+    if (!user) throw new Error("Email is not registered!");
+    const passwordsMatch = await compare(req.body.password, user.password);
+    if (!passwordsMatch) throw new Error("Email or password is invalid");
   } catch (error) {
     console.error(error);
     res.status(401).json({ ok: false, error: error.message });

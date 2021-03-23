@@ -15,11 +15,9 @@ app.get("/", (req, res) => {
 });
 app.get("/users", (req, res) => {
   client.users
-    .findMany
-    // {
-    //   select: { id: true, firstname: true, secondname: true, email: true },
-    //  }
-    ()
+    .findMany({
+      select: { id: true, firstname: true, secondname: true, email: true },
+    })
     .then((users) => {
       res.json(users);
     });

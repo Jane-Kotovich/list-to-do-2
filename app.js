@@ -3,6 +3,7 @@ const prisma = require("@prisma/client");
 const app = express();
 const PORT = 3000;
 const ACCESS_SECRET = "access_secret";
+const REFRESH_SECRET = "refresh_secret";
 const client = new prisma.PrismaClient();
 const morgan = require("morgan");
 const { compare, hash } = require("bcryptjs");
@@ -10,9 +11,11 @@ const jwt = require("jsonwebtoken");
 const passport = require("passport");
 const JwtStrategy = require("passport-jwt").Strategy;
 const ExtractJwt = require("passport-jwt").ExtractJwt;
+const cookieParser = require("cookie-parser");
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
+app.use(cookieParser());
 
 const passportOptions = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -25,6 +28,12 @@ passport.use(
       const user = await client.users.findUnique({
         where: {
           id: jwtPayload.sub,
+        },
+        select: {
+          id: true,
+          email: true,
+          firstname: true,
+          secondname: true,
         },
       });
       if (!user) throw new Error("not such user exists");
@@ -41,10 +50,16 @@ app.use(passport.initialize());
 app.get("/", (req, res) => {
   res.send("Heya there!");
 });
+
+app.post("/refresh_token", async (req, res) => {
+  try {
+  } catch (error) {}
+});
 app.get(
   "/users",
   passport.authenticate("jwt", { session: false }),
   (req, res) => {
+    console.log(req.user);
     client.users
       .findMany({
         select: { id: true, firstname: true, secondname: true, email: true },
@@ -83,9 +98,14 @@ app.post("/login", async (req, res) => {
     if (!user) throw new Error("Email is not registered!");
     const passwordsMatch = await compare(req.body.password, user.password);
     if (!passwordsMatch) throw new Error("Email or password is invalid");
+
     const accessToken = jwt.sign({ sub: user.id }, ACCESS_SECRET, {
-      expiresIn: "15m",
+      expiresIn: "20s",
     });
+    const refreshToken = jwt.sign({ sub: user.id }, REFRESH_SECRET, {
+      expiresIn: "7d",
+    });
+    res.cookie("rtok", refreshToken, { httpOnly: true });
     res.json({ accessToken: accessToken });
     console.log(accessToken);
   } catch (error) {
@@ -124,28 +144,31 @@ app.get("/dolist", (req, res) => {
   });
 });
 
-app.post("/dolist", (req, res) => {
-  // pretend we obtain userId from the JWT
-  const userId = 1;
-  client.list_to_do
-    .create({
-      data: {
-        item_to_do: req.body.item_to_do,
-        authorId: userId,
-        done: false,
-      },
-    })
-    .then((list_to_do) => {
-      client.list_to_do
-        .findMany({
-          where: { id: list_to_do.id },
-          include: { author: true },
-        })
-        .then((itemsToDoWithUser) => {
-          res.json(itemsToDoWithUser);
-        });
-    });
-});
+app.post(
+  "/dolist",
+  passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    const userId = req.user.id;
+    client.list_to_do
+      .create({
+        data: {
+          item_to_do: req.body.item_to_do,
+          authorId: userId,
+          done: false,
+        },
+      })
+      .then((list_to_do) => {
+        client.list_to_do
+          .findMany({
+            where: { id: list_to_do.id },
+            include: { author: true },
+          })
+          .then((itemsToDoWithUser) => {
+            res.json(itemsToDoWithUser);
+          });
+      });
+  }
+);
 
 app.listen(PORT, () => {
   console.log("Server is listening on 3000!");

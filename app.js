@@ -53,7 +53,35 @@ app.get("/", (req, res) => {
 
 app.post("/refresh_token", async (req, res) => {
   try {
-  } catch (error) {}
+    if (!req.cookies.rtok) throw new Error("no rtok");
+    const jwtPayload = jwt.verify(req.cookies.rtok, REFRESH_SECRET);
+    const user = await client.users.findUnique({
+      where: {
+        id: jwtPayload.sub,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstname: true,
+        secondname: true,
+      },
+    });
+    if (!user) throw new Error("no such user");
+    const accessToken = jwt.sign({ sub: user.id }, ACCESS_SECRET, {
+      expiresIn: "20s",
+    });
+    const refreshToken = jwt.sign({ sub: user.id }, REFRESH_SECRET, {
+      expiresIn: "7d",
+    });
+    res.cookie("rtok", refreshToken, { httpOnly: true });
+    res.json({ accessToken: accessToken });
+
+    //provide refersh token
+    //receive access token
+    // and new access token
+  } catch (error) {
+    res.status(401).json({ ok: false });
+  }
 });
 app.get(
   "/users",
